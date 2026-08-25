@@ -18,6 +18,8 @@ import {
   type PluginSidebarThread,
   type PluginThreadListProps,
 } from "@get-bb/plugin-sdk/app";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { PinIcon } from "@hugeicons/core-free-icons";
 import { buildSubtitleParts, SubtitleRow } from "@/components/subtitle-row";
 import { ThreadContextMenu } from "@/components/thread-context-menu";
 import {
@@ -236,7 +238,7 @@ function SidebarThreadList({
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
+    <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pt-0.5 pb-2">
       {sections.map((section) => (
         <ListSectionView
           key={sectionKey(section)}
@@ -310,6 +312,7 @@ function ListSectionView({
             key={row.thread.id}
             row={row}
             isActive={row.thread.id === activeThreadId}
+            isInPinnedSection={section.kind === "pinned"}
             settings={settings}
             gitStat={
               row.thread.environment?.id
@@ -334,6 +337,7 @@ function ListSectionView({
 function ThreadRow({
   row,
   isActive,
+  isInPinnedSection,
   settings,
   gitStat,
   pullRequestDetail,
@@ -343,6 +347,7 @@ function ThreadRow({
 }: {
   row: ThreadRowModel;
   isActive: boolean;
+  isInPinnedSection: boolean;
   settings: ReturnType<typeof parseListSettings>;
   gitStat: string | null | undefined;
   pullRequestDetail?: PullRequestDetail | null;
@@ -427,6 +432,9 @@ function ThreadRow({
           "group flex flex-col gap-0.5 rounded-md border px-2.5 pt-1.5 pb-2 transition-colors",
           isArchivedChild && "opacity-60",
           tone === "idle" && idleRowClass(isActive, layout !== null),
+          // Selected row always shows a ring border — beats the inline tint
+          // borderColor so an active tinted thread stays obviously selected.
+          isActive && !isArchivedChild && "!border-ring",
         )}
       >
         <div className="relative flex min-h-5 min-w-0 items-center gap-2">
@@ -458,10 +466,12 @@ function ThreadRow({
               {title}
             </span>
           )}
-          {thread.isPinned ? (
-            <span className="shrink-0 text-2xs font-medium text-muted-foreground">
-              pinned
-            </span>
+          {thread.isPinned && !isInPinnedSection ? (
+            <HugeiconsIcon
+              icon={PinIcon}
+              className="size-3 shrink-0 text-muted-foreground"
+              aria-hidden={true}
+            />
           ) : null}
           {isArchivedChild ? (
             <span className="shrink-0 text-2xs font-medium text-muted-foreground">
