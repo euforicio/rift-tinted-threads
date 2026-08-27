@@ -1,7 +1,37 @@
 import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 
+/** Realtime channel the sidebar re-reads its manual order on. */
+export const MANUAL_ORDER_CHANNEL = "manual-order";
+/** Realtime channel the sidebar re-reads its collapsed set on. */
+export const COLLAPSED_THREADS_CHANNEL = "collapsed-threads";
+
+/** KV key holding the user's manual thread order (an array of thread ids). */
+const MANUAL_ORDER_KEY = "manual-order";
+/** KV key holding the ids of threads whose children are collapsed. */
+const COLLAPSED_THREADS_KEY = "collapsed-threads";
+
 export const rpcContract = defineRpcContract({
+  manualOrderList: {
+    input: z.object({}).strict(),
+    output: z.object({ ids: z.array(z.string()) }).strict(),
+  },
+  manualOrderReorder: {
+    input: z
+      .object({ ids: z.array(z.string().min(1)).max(5000) })
+      .strict(),
+    output: z.object({ ids: z.array(z.string()) }).strict(),
+  },
+  collapsedThreadsList: {
+    input: z.object({}).strict(),
+    output: z.object({ ids: z.array(z.string()) }).strict(),
+  },
+  collapsedThreadsSet: {
+    input: z
+      .object({ ids: z.array(z.string().min(1)).max(5000) })
+      .strict(),
+    output: z.object({ ids: z.array(z.string()) }).strict(),
+  },
   gitStats: {
     input: z.object({ environmentIds: z.array(z.string()).max(80) }).strict(),
     output: z.object({ stats: z.record(z.string(), z.string().nullable()) }),
@@ -80,7 +110,9 @@ export default function plugin(bb: BbPluginApi) {
     sortBy: {
       type: "select",
       label: "Sort by",
-      options: ["created", "updated", "attention", "alpha"],
+      description:
+        "Manual lets you drag threads into any order you like (per group).",
+      options: ["created", "updated", "attention", "alpha", "manual"],
       default: "created",
     },
     showArchivedChildren: {
@@ -113,7 +145,43 @@ export default function plugin(bb: BbPluginApi) {
     },
   });
 
+  async function readStringList(key: string): Promise<string[]> {
+    try {
+      const stored = await bb.storage.kv.get<unknown>(key);
+      if (!Array.isArray(stored)) return [];
+      return stored.filter((id): id is string => typeof id === "string");
+    } catch (error) {
+      bb.log.debug(`could not read ${key}: ${String(error)}`);
+      return [];
+    }
+  }
+
+  // Keep the first occurrence of each id so a malformed client payload can
+  // never corrupt the stored list.
+  function dedupe(ids: readonly string[]): string[] {
+    const seen = new Set<string>();
+    return ids.filter((id) => !seen.has(id) && seen.add(id));
+  }
+
   bb.rpc.register(rpcContract, {
+    async manualOrderList() {
+      return { ids: await readStringList(MANUAL_ORDER_KEY) };
+    },
+    async manualOrderReorder({ ids }) {
+      const deduped = dedupe(ids);
+      await bb.storage.kv.set(MANUAL_ORDER_KEY, deduped);
+      bb.realtime.publish(MANUAL_ORDER_CHANNEL, {});
+      return { ids: deduped };
+    },
+    async collapsedThreadsList() {
+      return { ids: await readStringList(COLLAPSED_THREADS_KEY) };
+    },
+    async collapsedThreadsSet({ ids }) {
+      const deduped = dedupe(ids);
+      await bb.storage.kv.set(COLLAPSED_THREADS_KEY, deduped);
+      bb.realtime.publish(COLLAPSED_THREADS_CHANNEL, {});
+      return { ids: deduped };
+    },
     async gitStats({ environmentIds }) {
       const uniqueIds = [...new Set(environmentIds)];
       const entries = await Promise.all(

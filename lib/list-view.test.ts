@@ -74,6 +74,43 @@ test("nestedThreadRows orphans children when parent is outside the set", () => {
   assert.equal(rows[0]?.thread.id, "child");
 });
 
+test("nestedThreadRows counts children and hides them when collapsed", () => {
+  const threads = [
+    thread({ id: "root", createdAt: 300 }),
+    thread({ id: "child-a", parentThreadId: "root", createdAt: 200 }),
+    thread({ id: "child-b", parentThreadId: "root", createdAt: 100 }),
+    thread({ id: "grandchild", parentThreadId: "child-a", createdAt: 50 }),
+  ];
+  const compare = (left: PluginSidebarThread, right: PluginSidebarThread) =>
+    right.createdAt - left.createdAt;
+
+  const expanded = nestedThreadRows(threads, compare);
+  assert.deepEqual(
+    expanded.map((row) => row.thread.id),
+    ["root", "child-a", "grandchild", "child-b"],
+  );
+  assert.equal(expanded[0]?.childThreadCount, 2);
+  assert.equal(expanded[0]?.isCollapsed, false);
+
+  const collapsed = nestedThreadRows(threads, compare, new Set(["root"]));
+  assert.deepEqual(
+    collapsed.map((row) => row.thread.id),
+    ["root"],
+  );
+  assert.equal(collapsed[0]?.childThreadCount, 2);
+  assert.equal(collapsed[0]?.isCollapsed, true);
+});
+
+test("nestedThreadRows never marks a childless row collapsed", () => {
+  const rows = nestedThreadRows(
+    [thread({ id: "lonely" })],
+    (left, right) => right.createdAt - left.createdAt,
+    new Set(["lonely"]),
+  );
+  assert.equal(rows[0]?.childThreadCount, 0);
+  assert.equal(rows[0]?.isCollapsed, false);
+});
+
 test("flatThreadRows keeps pinned section flat", () => {
   const parent = thread({ id: "pin", isPinned: true, createdAt: 200 });
   const child = thread({

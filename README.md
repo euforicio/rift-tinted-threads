@@ -11,12 +11,25 @@ render directly beneath their parent with a simple depth indent. Right-clicking
 a row opens a thread actions menu, including **Open pull request** when one
 exists.
 
+A parent thread shows a **sub-thread count** with a chevron — click it to
+collapse or expand its children (the state is saved per install). A running
+thread also shows a **subagent count** when it has background agents in flight.
+
+When the list is flat (ungrouped) — or in the cross-project pinned strip —
+each row is captioned with its project name, so sorting the whole list by
+attention or update time never loses track of where a thread lives.
+
+Choose **Sort by → manual** to arrange threads by hand: drag a row by its grip
+handle (or press **Alt+↑ / Alt+↓** with a row focused) to reorder it within its
+group. The order is saved per install and stays put across restarts. Freshly
+created threads surface at the top until you place them.
+
 Configure the list under **Extensions → Plugins → Tinted Threads**:
 
 - **Group by** — `project` or `none`
 - **Pinned threads** — keep pins inside each group (`in-group`) or in a
   cross-project section at the top (`at-top`)
-- **Sort by** — created, updated, attention, or title
+- **Sort by** — created, updated, attention, title, or manual (drag to arrange)
 - **Show archived child threads** — nested archived sub-threads under a visible
   parent
 - **Subtitle columns** — provider/model, uncommitted diff (off by default), PR

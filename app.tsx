@@ -19,16 +19,32 @@ import {
   type PluginThreadListProps,
 } from "@get-bb/plugin-sdk/app";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { PinIcon } from "@hugeicons/core-free-icons";
+import {
+  ArrowDown01Icon,
+  ArrowRight01Icon,
+  GitBranchIcon,
+  GripVerticalIcon,
+  PinIcon,
+  Robot01Icon,
+} from "@hugeicons/core-free-icons";
 import { buildSubtitleParts, SubtitleRow } from "@/components/subtitle-row";
 import { ThreadContextMenu } from "@/components/thread-context-menu";
+import { useCollapsedThreads } from "@/components/use-collapsed-threads";
+import { useManualOrder } from "@/components/use-manual-order";
+import {
+  useReorderDrag,
+  type ReorderControls,
+} from "@/components/use-reorder-drag";
 import {
   buildListSections,
+  dragScopeById,
   filterVisibleThreads,
+  rootRowIds,
   totalRowCount,
   type ListSection,
   type ThreadRowModel,
 } from "@/lib/list-view";
+import { buildOrderRank } from "@/lib/manual-order";
 import { parseListSettings } from "@/lib/settings";
 import { type ThreadModelMetadata } from "@/lib/subtitle";
 import type { PullRequestDetail } from "@/lib/pull-request";
@@ -61,11 +77,69 @@ function SidebarThreadList({
     [settingsValues],
   );
   const rpc = useRpc<typeof rpcContract>();
+  const isManual = settings.sortBy === "manual";
+  const manualOrder = useManualOrder();
+  const collapsed = useCollapsedThreads();
 
-  const sections = useMemo(
-    () => buildListSections(threads, projects, settings, searchQuery),
-    [projects, searchQuery, settings, threads],
+  const projectNameById = useMemo(
+    () => new Map(projects.map((project) => [project.id, project.name])),
+    [projects],
   );
+
+  const baseSections = useMemo(
+    () =>
+      buildListSections(
+        threads,
+        projects,
+        settings,
+        searchQuery,
+        manualOrder.orderRank,
+        collapsed.collapsedIds,
+      ),
+    [
+      collapsed.collapsedIds,
+      manualOrder.orderRank,
+      projects,
+      searchQuery,
+      settings,
+      threads,
+    ],
+  );
+
+  const dragContext = useMemo(
+    () => ({
+      baseRootIds: rootRowIds(baseSections),
+      scopeById: dragScopeById(baseSections),
+    }),
+    [baseSections],
+  );
+  const reorderDrag = useReorderDrag({
+    enabled: isManual,
+    isReordering: manualOrder.isReordering,
+    context: dragContext,
+    reorder: manualOrder.reorder,
+  });
+
+  // While dragging, re-rank the list under the cursor so rows slide live.
+  const sections = useMemo(() => {
+    if (!reorderDrag.dragOrderIds) return baseSections;
+    return buildListSections(
+      threads,
+      projects,
+      settings,
+      searchQuery,
+      buildOrderRank(reorderDrag.dragOrderIds),
+      collapsed.collapsedIds,
+    );
+  }, [
+    baseSections,
+    collapsed.collapsedIds,
+    projects,
+    reorderDrag.dragOrderIds,
+    searchQuery,
+    settings,
+    threads,
+  ]);
   const visibleThreads = useMemo(
     () => filterVisibleThreads(threads, settings, searchQuery),
     [searchQuery, settings, threads],
@@ -249,6 +323,10 @@ function SidebarThreadList({
           pullRequestDetails={pullRequestDetails}
           threadModels={threadModels}
           displayStatuses={displayStatuses}
+          projectNameById={projectNameById}
+          isManual={isManual}
+          controlsFor={reorderDrag.controlsFor}
+          onToggleCollapse={collapsed.toggle}
           onNavigate={onNavigate}
         />
       ))}
@@ -286,6 +364,10 @@ function ListSectionView({
   pullRequestDetails,
   threadModels,
   displayStatuses,
+  projectNameById,
+  isManual,
+  controlsFor,
+  onToggleCollapse,
   onNavigate,
 }: {
   section: ListSection;
@@ -295,9 +377,16 @@ function ListSectionView({
   pullRequestDetails: Record<string, PullRequestDetail | null>;
   threadModels: Record<string, ThreadModelMetadata>;
   displayStatuses: Record<string, string | null>;
+  projectNameById: ReadonlyMap<string, string>;
+  isManual: boolean;
+  controlsFor: (threadId: string) => ReorderControls;
+  onToggleCollapse: (threadId: string) => void;
   onNavigate: () => void;
 }) {
   const title = sectionTitle(section);
+  // Cross-project sections (the flat list, the pinned strip) lose the project
+  // header, so caption each root row with its project instead.
+  const showProjectLabel = section.kind !== "project";
 
   return (
     <section className="mb-3 last:mb-0">
@@ -326,6 +415,13 @@ function ListSectionView({
             }
             modelMetadata={threadModels[row.thread.id]}
             displayStatus={displayStatuses[row.thread.id]}
+            projectLabel={
+              showProjectLabel && row.depth === 0
+                ? (projectNameById.get(row.thread.projectId) ?? null)
+                : null
+            }
+            reorderControls={isManual ? controlsFor(row.thread.id) : null}
+            onToggleCollapse={onToggleCollapse}
             onNavigate={onNavigate}
           />
         ))}
@@ -343,6 +439,9 @@ function ThreadRow({
   pullRequestDetail,
   modelMetadata,
   displayStatus,
+  projectLabel,
+  reorderControls,
+  onToggleCollapse,
   onNavigate,
 }: {
   row: ThreadRowModel;
@@ -353,9 +452,13 @@ function ThreadRow({
   pullRequestDetail?: PullRequestDetail | null;
   modelMetadata: ThreadModelMetadata | undefined;
   displayStatus: string | null | undefined;
+  projectLabel: string | null;
+  reorderControls: ReorderControls | null;
+  onToggleCollapse: (threadId: string) => void;
   onNavigate: () => void;
 }) {
-  const { thread, depth, isArchivedChild } = row;
+  const { thread, depth, isArchivedChild, childThreadCount, isCollapsed } = row;
+  const subagentCount = thread.activity.backgroundAgents;
   const actions = useSidebarThreadActions();
   const { pullRequest } = useSidebarThreadPullRequest(thread.id);
   const { splitProps, layout } = useSidebarThreadSplit(thread.id);
@@ -424,6 +527,7 @@ function ThreadRow({
           actions.open(thread.id, { split: event.metaKey || event.ctrlKey });
           onNavigate();
         }}
+        onKeyDown={reorderControls?.onKeyDown}
         style={{
           ...(depth > 0 ? { marginLeft: Math.min(depth, 4) * 16 } : undefined),
           ...rowStyle(tone, isActive, isArchivedChild),
@@ -431,15 +535,24 @@ function ThreadRow({
         className={cn(
           "group flex flex-col gap-0.5 rounded-md border px-2.5 pt-1.5 pb-2 transition-colors",
           isArchivedChild && "opacity-60",
+          reorderControls?.isDragging && "opacity-50",
           tone === "idle" && idleRowClass(isActive, layout !== null),
           // Selected row always shows a ring border — beats the inline tint
           // borderColor so an active tinted thread stays obviously selected.
           isActive && !isArchivedChild && "!border-ring",
         )}
       >
+        {projectLabel ? (
+          <span className="truncate text-2xs font-medium uppercase tracking-normal text-muted-foreground/60">
+            {projectLabel}
+          </span>
+        ) : null}
         <div className="relative flex min-h-5 min-w-0 items-center gap-2">
           {depth > 0 ? (
             <span className="absolute left-1 top-1/2 h-px w-2 -translate-x-3 -translate-y-1/2 bg-sidebar-border" />
+          ) : null}
+          {reorderControls && !isArchivedChild ? (
+            <DragHandle controls={reorderControls} />
           ) : null}
           <span
             className="size-1.5 shrink-0 translate-y-px rounded-full"
@@ -466,6 +579,16 @@ function ThreadRow({
               {title}
             </span>
           )}
+          {subagentCount > 0 && !isArchivedChild ? (
+            <SubagentBadge count={subagentCount} />
+          ) : null}
+          {childThreadCount > 0 && !isInPinnedSection && !isArchivedChild ? (
+            <SubthreadBadge
+              count={childThreadCount}
+              collapsed={isCollapsed}
+              onToggle={() => onToggleCollapse(thread.id)}
+            />
+          ) : null}
           {thread.isPinned && !isInPinnedSection ? (
             <HugeiconsIcon
               icon={PinIcon}
@@ -489,6 +612,85 @@ function ThreadRow({
         />
       </a>
     </ThreadContextMenu>
+  );
+}
+
+function DragHandle({ controls }: { controls: ReorderControls }) {
+  return (
+    <span
+      role="button"
+      aria-label="Drag to reorder"
+      title="Drag to reorder (or Alt+↑/↓)"
+      draggable={false}
+      onPointerDown={controls.disabled ? undefined : controls.onPointerDown}
+      // A plain click on the grip must not fall through to the row's navigate.
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+      className={cn(
+        "-ml-1 -my-1 flex shrink-0 items-center self-stretch px-0.5 text-muted-foreground/25 transition-colors group-hover:text-muted-foreground/70",
+        controls.disabled ? "cursor-default" : "cursor-grab active:cursor-grabbing",
+      )}
+    >
+      <HugeiconsIcon icon={GripVerticalIcon} className="size-3.5" aria-hidden={true} />
+    </span>
+  );
+}
+
+function SubagentBadge({ count }: { count: number }) {
+  const label = `${count} subagent${count === 1 ? "" : "s"} running`;
+  return (
+    <span
+      aria-label={label}
+      title={label}
+      className="flex h-4 shrink-0 items-center gap-0.5 rounded bg-muted px-1 text-2xs font-medium tabular-nums text-muted-foreground"
+    >
+      <HugeiconsIcon icon={Robot01Icon} className="size-3" aria-hidden={true} />
+      {count}
+    </span>
+  );
+}
+
+function SubthreadBadge({
+  count,
+  collapsed,
+  onToggle,
+}: {
+  count: number;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  const label = `${count} sub-thread${count === 1 ? "" : "s"}${
+    collapsed ? ", collapsed" : ""
+  }`;
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-expanded={!collapsed}
+      title={`${label} — click to ${collapsed ? "expand" : "collapse"}`}
+      // A click here toggles children; it must not open the thread.
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onToggle();
+      }}
+      onPointerDown={(event) => event.stopPropagation()}
+      className={cn(
+        "flex h-4 shrink-0 items-center gap-0.5 rounded px-1 text-2xs font-medium tabular-nums outline-none focus-visible:ring-1 focus-visible:ring-ring",
+        "text-muted-foreground hover:bg-accent hover:text-foreground",
+        collapsed && "bg-muted",
+      )}
+    >
+      <HugeiconsIcon icon={GitBranchIcon} className="size-3" aria-hidden={true} />
+      {count}
+      <HugeiconsIcon
+        icon={collapsed ? ArrowRight01Icon : ArrowDown01Icon}
+        className="size-3 text-muted-foreground/70"
+        aria-hidden={true}
+      />
+    </button>
   );
 }
 

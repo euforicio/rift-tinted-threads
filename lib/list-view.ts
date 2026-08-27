@@ -7,6 +7,10 @@ export type ThreadRowModel = {
   thread: PluginSidebarThread;
   depth: number;
   isArchivedChild: boolean;
+  /** Direct child threads nested under this row in the current view. */
+  childThreadCount: number;
+  /** True when this row's children are hidden by a user collapse. */
+  isCollapsed: boolean;
 };
 
 export type ListSection =
@@ -100,6 +104,8 @@ export function flatThreadRows(
       thread,
       depth: 0,
       isArchivedChild: thread.isArchived,
+      childThreadCount: 0,
+      isCollapsed: false,
     }));
 }
 
@@ -109,6 +115,7 @@ export function nestedThreadRows(
     left: PluginSidebarThread,
     right: PluginSidebarThread,
   ) => number,
+  collapsedIds?: ReadonlySet<string>,
 ): ThreadRowModel[] {
   const threadIds = new Set(threads.map((thread) => thread.id));
   const childrenByParent = new Map<string, PluginSidebarThread[]>();
@@ -136,12 +143,17 @@ export function nestedThreadRows(
   function visit(thread: PluginSidebarThread, depth: number) {
     if (seen.has(thread.id)) return;
     seen.add(thread.id);
+    const children = childrenByParent.get(thread.id) ?? [];
+    const collapsed = children.length > 0 && (collapsedIds?.has(thread.id) ?? false);
     rows.push({
       thread,
       depth,
       isArchivedChild: thread.isArchived,
+      childThreadCount: children.length,
+      isCollapsed: collapsed,
     });
-    for (const child of childrenByParent.get(thread.id) ?? []) {
+    if (collapsed) return;
+    for (const child of children) {
       visit(child, depth + 1);
     }
   }
@@ -161,6 +173,7 @@ function projectThreadGroups(
     left: PluginSidebarThread,
     right: PluginSidebarThread,
   ) => number,
+  collapsedIds?: ReadonlySet<string>,
 ): ListSection[] {
   const threadsByProject = new Map<string, PluginSidebarThread[]>();
 
@@ -184,6 +197,7 @@ function projectThreadGroups(
     rows: nestedThreadRows(
       threadsByProject.get(projectId) ?? [],
       compareThreads,
+      collapsedIds,
     ),
   }));
 }
@@ -193,11 +207,14 @@ export function buildListSections(
   projects: readonly PluginSidebarProject[],
   settings: ListSettings,
   searchQuery: string,
+  orderRank?: ReadonlyMap<string, number>,
+  collapsedIds?: ReadonlySet<string>,
 ): ListSection[] {
   const visible = filterVisibleThreads(threads, settings, searchQuery);
   const compareThreads = createListComparator(
     settings.sortBy,
     settings.pinnedPlacement,
+    orderRank,
   );
   const projectNameById = new Map(
     projects.map((project) => [project.id, project.name]),
@@ -224,13 +241,14 @@ export function buildListSections(
           projectNameById,
           projectOrder,
           compareThreads,
+          collapsedIds,
         ),
       );
     } else if (unpinned.length > 0) {
       sections.push({
         kind: "flat",
         title: pinned.length > 0 ? "Threads" : null,
-        rows: nestedThreadRows(unpinned, compareThreads),
+        rows: nestedThreadRows(unpinned, compareThreads, collapsedIds),
       });
     }
 
@@ -243,13 +261,50 @@ export function buildListSections(
       projectNameById,
       projectOrder,
       compareThreads,
+      collapsedIds,
     ).filter((section) => section.rows.length > 0);
   }
 
-  const rows = nestedThreadRows(visible, compareThreads);
+  const rows = nestedThreadRows(visible, compareThreads, collapsedIds);
   return rows.length > 0 ? [{ kind: "flat", title: null, rows }] : [];
 }
 
 export function totalRowCount(sections: readonly ListSection[]): number {
   return sections.reduce((count, section) => count + section.rows.length, 0);
+}
+
+/** Every reorderable (depth-0) row id, in current display order. */
+export function rootRowIds(sections: readonly ListSection[]): string[] {
+  const ids: string[] = [];
+  for (const section of sections) {
+    for (const row of section.rows) {
+      if (row.depth === 0) ids.push(row.thread.id);
+    }
+  }
+  return ids;
+}
+
+/**
+ * Map each reorderable row to the sibling ids it may reorder among: same
+ * section, same pinned state. Scoping to the pinned block keeps a drag from
+ * silently interleaving pins with unpinned rows (which the comparator would
+ * only snap back).
+ */
+export function dragScopeById(
+  sections: readonly ListSection[],
+): Map<string, string[]> {
+  const scopeById = new Map<string, string[]>();
+  for (const section of sections) {
+    const roots = section.rows.filter((row) => row.depth === 0);
+    const pinned = roots
+      .filter((row) => row.thread.isPinned)
+      .map((row) => row.thread.id);
+    const unpinned = roots
+      .filter((row) => !row.thread.isPinned)
+      .map((row) => row.thread.id);
+    for (const row of roots) {
+      scopeById.set(row.thread.id, row.thread.isPinned ? pinned : unpinned);
+    }
+  }
+  return scopeById;
 }

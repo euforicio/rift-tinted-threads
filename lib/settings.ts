@@ -1,6 +1,6 @@
 export type GroupBy = "project" | "none";
 export type PinnedPlacement = "in-group" | "at-top";
-export type SortBy = "created" | "updated" | "attention" | "alpha";
+export type SortBy = "created" | "updated" | "attention" | "alpha" | "manual";
 export type WorkspaceLabelMode = "branch" | "worktree" | "host" | "smart";
 
 export interface ListSettings {
@@ -27,7 +27,13 @@ export const DEFAULT_LIST_SETTINGS: ListSettings = {
 
 const GROUP_BY = new Set<GroupBy>(["project", "none"]);
 const PINNED_PLACEMENT = new Set<PinnedPlacement>(["in-group", "at-top"]);
-const SORT_BY = new Set<SortBy>(["created", "updated", "attention", "alpha"]);
+const SORT_BY = new Set<SortBy>([
+  "created",
+  "updated",
+  "attention",
+  "alpha",
+  "manual",
+]);
 const WORKSPACE_LABEL = new Set<WorkspaceLabelMode>([
   "branch",
   "worktree",
