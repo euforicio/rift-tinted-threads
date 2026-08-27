@@ -19,10 +19,11 @@ When the list is flat (ungrouped) — or in the cross-project pinned strip —
 each row is captioned with its project name, so sorting the whole list by
 attention or update time never loses track of where a thread lives.
 
-Choose **Sort by → manual** to arrange threads by hand: drag a row by its grip
-handle (or press **Alt+↑ / Alt+↓** with a row focused) to reorder it within its
-group. The order is saved per install and stays put across restarts. Freshly
-created threads surface at the top until you place them.
+Choose **Sort by → manual** to arrange threads by hand: drag a row up or down
+(or press **Alt+↑ / Alt+↓** with a row focused) to reorder it within its group.
+The order is saved per install and stays put across restarts. Freshly created
+threads surface at the top until you place them. (A sideways drag toward the
+main area still opens the thread in a split, as everywhere else.)
 
 Configure the list under **Extensions → Plugins → Tinted Threads**:
 

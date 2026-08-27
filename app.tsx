@@ -23,7 +23,6 @@ import {
   ArrowDown01Icon,
   ArrowRight01Icon,
   GitBranchIcon,
-  GripVerticalIcon,
   PinIcon,
   Robot01Icon,
 } from "@hugeicons/core-free-icons";
@@ -527,6 +526,13 @@ function ThreadRow({
           actions.open(thread.id, { split: event.metaKey || event.ctrlKey });
           onNavigate();
         }}
+        // Compose bb's split-drag (horizontal, toward the main area) with our
+        // reorder-drag (vertical, within the list). The reorder gesture only
+        // engages on vertical travel, so the two never fight over a press.
+        onPointerDown={(event) => {
+          splitProps.onPointerDown?.(event);
+          if (!isRenaming) reorderControls?.onPointerDown(event);
+        }}
         onKeyDown={reorderControls?.onKeyDown}
         style={{
           ...(depth > 0 ? { marginLeft: Math.min(depth, 4) * 16 } : undefined),
@@ -536,6 +542,10 @@ function ThreadRow({
           "group flex flex-col gap-0.5 rounded-md border px-2.5 pt-1.5 pb-2 transition-colors",
           isArchivedChild && "opacity-60",
           reorderControls?.isDragging && "opacity-50",
+          // Whole-row drag in manual mode: hint it with a grab cursor on the
+          // rows that can actually move (top-level threads).
+          reorderControls && !reorderControls.disabled && depth === 0 &&
+            "cursor-grab active:cursor-grabbing",
           tone === "idle" && idleRowClass(isActive, layout !== null),
           // Selected row always shows a ring border — beats the inline tint
           // borderColor so an active tinted thread stays obviously selected.
@@ -550,9 +560,6 @@ function ThreadRow({
         <div className="relative flex min-h-5 min-w-0 items-center gap-2">
           {depth > 0 ? (
             <span className="absolute left-1 top-1/2 h-px w-2 -translate-x-3 -translate-y-1/2 bg-sidebar-border" />
-          ) : null}
-          {reorderControls && !isArchivedChild ? (
-            <DragHandle controls={reorderControls} />
           ) : null}
           <span
             className="size-1.5 shrink-0 translate-y-px rounded-full"
@@ -612,29 +619,6 @@ function ThreadRow({
         />
       </a>
     </ThreadContextMenu>
-  );
-}
-
-function DragHandle({ controls }: { controls: ReorderControls }) {
-  return (
-    <span
-      role="button"
-      aria-label="Drag to reorder"
-      title="Drag to reorder (or Alt+↑/↓)"
-      draggable={false}
-      onPointerDown={controls.disabled ? undefined : controls.onPointerDown}
-      // A plain click on the grip must not fall through to the row's navigate.
-      onClick={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-      }}
-      className={cn(
-        "-ml-1 -my-1 flex shrink-0 items-center self-stretch px-0.5 text-muted-foreground/25 transition-colors group-hover:text-muted-foreground/70",
-        controls.disabled ? "cursor-default" : "cursor-grab active:cursor-grabbing",
-      )}
-    >
-      <HugeiconsIcon icon={GripVerticalIcon} className="size-3.5" aria-hidden={true} />
-    </span>
   );
 }
 
