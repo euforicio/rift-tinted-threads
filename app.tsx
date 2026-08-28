@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useEffect,
   useMemo,
   useRef,
@@ -52,6 +53,8 @@ import { cn } from "@/lib/utils";
 import type { rpcContract } from "./server";
 
 type RowTone = "blocked" | "working" | "idle";
+
+type ChildToneCounts = { blocked: number; working: number; idle: number };
 
 const TONE_SEVERITY: Record<RowTone, number> = {
   idle: 0,
@@ -204,6 +207,24 @@ function SidebarThreadList({
       if (!childrenByParent.has(thread.id)) continue;
       const tone = descendantTone(thread.id);
       if (tone) result.set(thread.id, tone);
+    }
+    return result;
+  }, [displayStatuses, visibleThreads]);
+
+  // Break each parent's direct children down by tone so the disclosure badge
+  // can read `working/idle` (e.g. 3/1), or `blocked/working/idle` when any
+  // child needs input. Counts direct children only, matching childThreadCount.
+  const childCountsByParent = useMemo(() => {
+    const result = new Map<string, ChildToneCounts>();
+    for (const thread of visibleThreads) {
+      const parentId = thread.parentThreadId;
+      if (!parentId) continue;
+      const tone: RowTone = thread.isArchived
+        ? "idle"
+        : rowTone(thread, displayStatuses[thread.id]);
+      const bucket = result.get(parentId) ?? { blocked: 0, working: 0, idle: 0 };
+      bucket[tone] += 1;
+      result.set(parentId, bucket);
     }
     return result;
   }, [displayStatuses, visibleThreads]);
@@ -376,6 +397,7 @@ function SidebarThreadList({
           displayStatuses={displayStatuses}
           projectNameById={projectNameById}
           childToneByParent={childToneByParent}
+          childCountsByParent={childCountsByParent}
           isManual={isManual}
           controlsFor={reorderDrag.controlsFor}
           onToggleCollapse={collapsed.toggle}
@@ -418,6 +440,7 @@ function ListSectionView({
   displayStatuses,
   projectNameById,
   childToneByParent,
+  childCountsByParent,
   isManual,
   controlsFor,
   onToggleCollapse,
@@ -432,6 +455,7 @@ function ListSectionView({
   displayStatuses: Record<string, string | null>;
   projectNameById: ReadonlyMap<string, string>;
   childToneByParent: ReadonlyMap<string, RowTone>;
+  childCountsByParent: ReadonlyMap<string, ChildToneCounts>;
   isManual: boolean;
   controlsFor: (threadId: string) => ReorderControls;
   onToggleCollapse: (threadId: string) => void;
@@ -476,6 +500,7 @@ function ListSectionView({
             }
             reorderControls={isManual ? controlsFor(row.thread.id) : null}
             childTone={childToneByParent.get(row.thread.id) ?? null}
+            childCounts={childCountsByParent.get(row.thread.id) ?? null}
             onToggleCollapse={onToggleCollapse}
             onNavigate={onNavigate}
           />
@@ -497,6 +522,7 @@ function ThreadRow({
   projectLabel,
   reorderControls,
   childTone,
+  childCounts,
   onToggleCollapse,
   onNavigate,
 }: {
@@ -511,6 +537,7 @@ function ThreadRow({
   projectLabel: string | null;
   reorderControls: ReorderControls | null;
   childTone: RowTone | null;
+  childCounts: ChildToneCounts | null;
   onToggleCollapse: (threadId: string) => void;
   onNavigate: () => void;
 }) {
@@ -652,9 +679,12 @@ function ThreadRow({
           {subagentCount > 0 && !isArchivedChild ? (
             <SubagentBadge count={subagentCount} />
           ) : null}
-          {childThreadCount > 0 && !isInPinnedSection && !isArchivedChild ? (
+          {childThreadCount > 0 &&
+          childCounts &&
+          !isInPinnedSection &&
+          !isArchivedChild ? (
             <SubthreadBadge
-              count={childThreadCount}
+              counts={childCounts}
               collapsed={isCollapsed}
               tone={childTone}
               onToggle={() => onToggleCollapse(thread.id)}
@@ -700,22 +730,43 @@ function SubagentBadge({ count }: { count: number }) {
   );
 }
 
+/** Text colour for a single tone's count within the breakdown. */
+function segmentToneClass(tone: RowTone): string {
+  return tone === "blocked"
+    ? "text-destructive"
+    : tone === "working"
+      ? "text-emerald-600 dark:text-emerald-400"
+      : "text-muted-foreground";
+}
+
 function SubthreadBadge({
-  count,
+  counts,
   collapsed,
   tone,
   onToggle,
 }: {
-  count: number;
+  counts: ChildToneCounts;
   collapsed: boolean;
   tone: RowTone | null;
   onToggle: () => void;
 }) {
-  const toneLabel =
-    tone === "blocked" ? ", needs input" : tone === "working" ? ", working" : "";
-  const label = `${count} sub-thread${count === 1 ? "" : "s"}${
-    collapsed ? ", collapsed" : ""
-  }${toneLabel}`;
+  const total = counts.blocked + counts.working + counts.idle;
+  // blocked is only shown when present, so an unblocked subtree reads `2/4`
+  // rather than `0/2/4`.
+  const segments: { tone: RowTone; value: number }[] = [];
+  if (counts.blocked > 0) {
+    segments.push({ tone: "blocked", value: counts.blocked });
+  }
+  segments.push({ tone: "working", value: counts.working });
+  segments.push({ tone: "idle", value: counts.idle });
+
+  const breakdown =
+    counts.blocked > 0
+      ? `${counts.blocked} blocked, ${counts.working} working, ${counts.idle} idle`
+      : `${counts.working} working, ${counts.idle} idle`;
+  const label = `${total} sub-thread${
+    total === 1 ? "" : "s"
+  } (${breakdown})${collapsed ? ", collapsed" : ""}`;
   return (
     <button
       type="button"
@@ -747,7 +798,18 @@ function SubthreadBadge({
       )}
     >
       <HugeiconsIcon icon={GitBranchIcon} className="size-3" aria-hidden={true} />
-      {count}
+      <span className="tabular-nums">
+        {segments.map((segment, index) => (
+          <Fragment key={segment.tone}>
+            {index > 0 ? (
+              <span className="text-muted-foreground/40">/</span>
+            ) : null}
+            <span className={segmentToneClass(segment.tone)}>
+              {segment.value}
+            </span>
+          </Fragment>
+        ))}
+      </span>
       <HugeiconsIcon
         icon={collapsed ? ArrowRight01Icon : ArrowDown01Icon}
         className="size-3 text-muted-foreground/70"
