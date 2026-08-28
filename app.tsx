@@ -751,19 +751,15 @@ function SubthreadBadge({
   onToggle: () => void;
 }) {
   const total = counts.blocked + counts.working + counts.idle;
-  // blocked is only shown when present, so an unblocked subtree reads `2/4`
-  // rather than `0/2/4`.
-  const segments: { tone: RowTone; value: number }[] = [];
-  if (counts.blocked > 0) {
-    segments.push({ tone: "blocked", value: counts.blocked });
-  }
-  segments.push({ tone: "working", value: counts.working });
-  segments.push({ tone: "idle", value: counts.idle });
+  // Only show tones that are actually present, so `3 working, 0 idle` reads as a
+  // single tinted `3` rather than `3/0`, and a mixed subtree reads `1/2/4`.
+  const segments = (["blocked", "working", "idle"] as const)
+    .map((tone) => ({ tone, value: counts[tone] }))
+    .filter((segment) => segment.value > 0);
 
-  const breakdown =
-    counts.blocked > 0
-      ? `${counts.blocked} blocked, ${counts.working} working, ${counts.idle} idle`
-      : `${counts.working} working, ${counts.idle} idle`;
+  const breakdown = segments
+    .map((segment) => `${segment.value} ${segment.tone}`)
+    .join(", ");
   const label = `${total} sub-thread${
     total === 1 ? "" : "s"
   } (${breakdown})${collapsed ? ", collapsed" : ""}`;
