@@ -531,7 +531,11 @@ function ThreadRow({
         // engages on vertical travel, so the two never fight over a press.
         onPointerDown={(event) => {
           splitProps.onPointerDown?.(event);
-          if (!isRenaming) reorderControls?.onPointerDown(event);
+          if (isRenaming) return;
+          // While this row's context menu is open, Radix owns the next press
+          // (it dismisses the menu), so don't try to start a reorder from it.
+          if (event.currentTarget.getAttribute("data-state") === "open") return;
+          reorderControls?.onPointerDown(event);
         }}
         onKeyDown={reorderControls?.onKeyDown}
         style={{
@@ -543,9 +547,10 @@ function ThreadRow({
           isArchivedChild && "opacity-60",
           reorderControls?.isDragging && "opacity-50",
           // Whole-row drag in manual mode: hint it with a grab cursor on the
-          // rows that can actually move (top-level threads).
+          // rows that can actually move (top-level threads). Drop the hint
+          // while the context menu is open — the row isn't draggable then.
           reorderControls && !reorderControls.disabled && depth === 0 &&
-            "cursor-grab active:cursor-grabbing",
+            "cursor-grab active:cursor-grabbing data-[state=open]:cursor-default",
           tone === "idle" && idleRowClass(isActive, layout !== null),
           // Selected row always shows a ring border — beats the inline tint
           // borderColor so an active tinted thread stays obviously selected.
