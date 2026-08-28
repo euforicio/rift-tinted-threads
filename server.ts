@@ -98,7 +98,7 @@ export default function plugin(bb: BbPluginApi) {
       label: "Group by",
       description: "Project headers or one flat list.",
       options: ["project", "none"],
-      default: "project",
+      default: "none",
     },
     pinnedPlacement: {
       type: "select",
@@ -113,7 +113,7 @@ export default function plugin(bb: BbPluginApi) {
       description:
         "Manual lets you drag threads into any order you like (per group).",
       options: ["created", "updated", "attention", "alpha", "manual"],
-      default: "created",
+      default: "attention",
     },
     showArchivedChildren: {
       type: "boolean",

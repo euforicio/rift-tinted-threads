@@ -15,9 +15,9 @@ export interface ListSettings {
 }
 
 export const DEFAULT_LIST_SETTINGS: ListSettings = {
-  groupBy: "project",
+  groupBy: "none",
   pinnedPlacement: "in-group",
-  sortBy: "created",
+  sortBy: "attention",
   showArchivedChildren: false,
   showModel: true,
   showDiff: false,
