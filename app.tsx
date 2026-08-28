@@ -53,6 +53,19 @@ import type { rpcContract } from "./server";
 
 type RowTone = "blocked" | "working" | "idle";
 
+const TONE_SEVERITY: Record<RowTone, number> = {
+  idle: 0,
+  working: 1,
+  blocked: 2,
+};
+
+/** The more attention-worthy of two tones (blocked > working > idle). */
+function maxTone(a: RowTone | null, b: RowTone | null): RowTone | null {
+  if (a === null) return b;
+  if (b === null) return a;
+  return TONE_SEVERITY[a] >= TONE_SEVERITY[b] ? a : b;
+}
+
 const LIVE_DISPLAY_STATUSES = new Set([
   "active",
   "starting",
@@ -155,6 +168,45 @@ function SidebarThreadList({
     Record<string, string | null>
   >({});
   const [statusRefreshTick, setStatusRefreshTick] = useState(0);
+
+  // Aggregate each parent's descendant tone so a collapsed row's disclosure
+  // badge can signal "something inside needs you" (red) or "work is running"
+  // (green) without expanding it.
+  const childToneByParent = useMemo(() => {
+    const childrenByParent = new Map<string, PluginSidebarThread[]>();
+    for (const thread of visibleThreads) {
+      const parentId = thread.parentThreadId;
+      if (!parentId) continue;
+      const siblings = childrenByParent.get(parentId) ?? [];
+      siblings.push(thread);
+      childrenByParent.set(parentId, siblings);
+    }
+
+    const result = new Map<string, RowTone>();
+    const visiting = new Set<string>();
+    function descendantTone(id: string): RowTone | null {
+      const children = childrenByParent.get(id);
+      if (!children || children.length === 0 || visiting.has(id)) return null;
+      visiting.add(id);
+      let best: RowTone | null = null;
+      for (const child of children) {
+        const childTone = child.isArchived
+          ? "idle"
+          : rowTone(child, displayStatuses[child.id]);
+        best = maxTone(maxTone(best, childTone), descendantTone(child.id));
+        if (best === "blocked") break;
+      }
+      visiting.delete(id);
+      return best;
+    }
+
+    for (const thread of visibleThreads) {
+      if (!childrenByParent.has(thread.id)) continue;
+      const tone = descendantTone(thread.id);
+      if (tone) result.set(thread.id, tone);
+    }
+    return result;
+  }, [displayStatuses, visibleThreads]);
   const visibleThreadIds = useMemo(
     () => new Set(visibleThreads.map((thread) => thread.id)),
     [visibleThreads],
@@ -323,6 +375,7 @@ function SidebarThreadList({
           threadModels={threadModels}
           displayStatuses={displayStatuses}
           projectNameById={projectNameById}
+          childToneByParent={childToneByParent}
           isManual={isManual}
           controlsFor={reorderDrag.controlsFor}
           onToggleCollapse={collapsed.toggle}
@@ -364,6 +417,7 @@ function ListSectionView({
   threadModels,
   displayStatuses,
   projectNameById,
+  childToneByParent,
   isManual,
   controlsFor,
   onToggleCollapse,
@@ -377,6 +431,7 @@ function ListSectionView({
   threadModels: Record<string, ThreadModelMetadata>;
   displayStatuses: Record<string, string | null>;
   projectNameById: ReadonlyMap<string, string>;
+  childToneByParent: ReadonlyMap<string, RowTone>;
   isManual: boolean;
   controlsFor: (threadId: string) => ReorderControls;
   onToggleCollapse: (threadId: string) => void;
@@ -420,6 +475,7 @@ function ListSectionView({
                 : null
             }
             reorderControls={isManual ? controlsFor(row.thread.id) : null}
+            childTone={childToneByParent.get(row.thread.id) ?? null}
             onToggleCollapse={onToggleCollapse}
             onNavigate={onNavigate}
           />
@@ -440,6 +496,7 @@ function ThreadRow({
   displayStatus,
   projectLabel,
   reorderControls,
+  childTone,
   onToggleCollapse,
   onNavigate,
 }: {
@@ -453,6 +510,7 @@ function ThreadRow({
   displayStatus: string | null | undefined;
   projectLabel: string | null;
   reorderControls: ReorderControls | null;
+  childTone: RowTone | null;
   onToggleCollapse: (threadId: string) => void;
   onNavigate: () => void;
 }) {
@@ -598,6 +656,7 @@ function ThreadRow({
             <SubthreadBadge
               count={childThreadCount}
               collapsed={isCollapsed}
+              tone={childTone}
               onToggle={() => onToggleCollapse(thread.id)}
             />
           ) : null}
@@ -644,15 +703,19 @@ function SubagentBadge({ count }: { count: number }) {
 function SubthreadBadge({
   count,
   collapsed,
+  tone,
   onToggle,
 }: {
   count: number;
   collapsed: boolean;
+  tone: RowTone | null;
   onToggle: () => void;
 }) {
+  const toneLabel =
+    tone === "blocked" ? ", needs input" : tone === "working" ? ", working" : "";
   const label = `${count} sub-thread${count === 1 ? "" : "s"}${
     collapsed ? ", collapsed" : ""
-  }`;
+  }${toneLabel}`;
   return (
     <button
       type="button"
@@ -667,9 +730,20 @@ function SubthreadBadge({
       }}
       onPointerDown={(event) => event.stopPropagation()}
       className={cn(
-        "flex h-4 shrink-0 items-center gap-0.5 rounded px-1 text-2xs font-medium tabular-nums outline-none focus-visible:ring-1 focus-visible:ring-ring",
-        "text-muted-foreground hover:bg-accent hover:text-foreground",
-        collapsed && "bg-muted",
+        "flex h-4 shrink-0 items-center gap-0.5 rounded px-1 text-2xs font-medium tabular-nums outline-none transition-colors focus-visible:ring-1 focus-visible:ring-ring",
+        // Colour by the worst child status so a collapsed subtree still shows
+        // whether it needs you (red) or has work running (green).
+        tone === "blocked"
+          ? "text-destructive hover:bg-destructive/10"
+          : tone === "working"
+            ? "text-emerald-600 hover:bg-emerald-500/10 dark:text-emerald-400"
+            : "text-muted-foreground hover:bg-accent hover:text-foreground",
+        collapsed &&
+          (tone === "blocked"
+            ? "bg-destructive/10"
+            : tone === "working"
+              ? "bg-emerald-500/10"
+              : "bg-muted"),
       )}
     >
       <HugeiconsIcon icon={GitBranchIcon} className="size-3" aria-hidden={true} />
