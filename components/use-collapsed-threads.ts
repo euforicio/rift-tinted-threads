@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRealtime, useRpc } from "@riftlabs/plugin-sdk/app";
-import { COLLAPSED_THREADS_CHANNEL, type rpcContract } from "@/server";
+import type { rpcContract } from "@/server";
+import { COLLAPSED_THREADS_CHANNEL } from "@/lib/channels";
 
 export interface CollapsedThreadsApi {
   /** Thread ids whose children are collapsed. */

@@ -1,10 +1,7 @@
 import { defineRpcContract, type RiftPluginApi } from "@riftlabs/plugin-sdk";
 import { z } from "zod";
 
-/** Realtime channel the sidebar re-reads its manual order on. */
-export const MANUAL_ORDER_CHANNEL = "manual-order";
-/** Realtime channel the sidebar re-reads its collapsed set on. */
-export const COLLAPSED_THREADS_CHANNEL = "collapsed-threads";
+import { MANUAL_ORDER_CHANNEL, COLLAPSED_THREADS_CHANNEL } from "./lib/channels";
 
 /** KV key holding the user's manual thread order (an array of thread ids). */
 const MANUAL_ORDER_KEY = "manual-order";
