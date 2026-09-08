@@ -1,4 +1,4 @@
-import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
+import type { PluginSidebarThread } from "@riftlabs/plugin-sdk/app";
 import type { WorkspaceLabelMode } from "./settings";
 
 export type DiffStat = {

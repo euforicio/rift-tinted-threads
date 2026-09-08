@@ -1,12 +1,18 @@
 {
-  "name": "bb-plugin-tinted-threads",
+  "name": "rift-plugin-tinted-threads",
+  "homepage": "https://riftlabs.app",
+  "author": "Rift Labs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/euforicio/rift-tinted-threads.git"
+  },
   "version": "0.4.3",
   "type": "module",
   "engines": {
-    "bb": ">=0.38",
-    "bbPluginSdk": ">=0.4.6"
+    "rift": ">=0.38",
+    "riftPluginSdk": ">=0.4.48"
   },
-  "bb": {
+  "rift": {
     "name": "Tinted Threads",
     "description": "A tinted replacement for bb's sidebar thread list.",
     "branding": {
@@ -19,20 +25,33 @@
   "dependencies": {
     "@hugeicons/core-free-icons": "^4.2.3",
     "@hugeicons/react": "^1.1.9",
-    "@radix-ui/react-context-menu": "^2.3.7",
+    "zod": "^4.3.6",
+    "@riftlabs/plugin-sdk": "0.4.48",
     "clsx": "^2.1.1",
     "tailwind-merge": "^3.4.0",
-    "zod": "^4.3.6"
+    "@radix-ui/react-context-menu": "^2.3.3"
   },
   "devDependencies": {
-    "@get-bb/plugin-sdk": "0.4.6",
+    "@pierre/diffs": "^1.2.9",
+    "@radix-ui/react-alert-dialog": "^1.1.19",
+    "@radix-ui/react-dialog": "^1.1.19",
+    "@radix-ui/react-dropdown-menu": "^2.1.20",
+    "@radix-ui/react-hover-card": "^1.1.19",
+    "@radix-ui/react-menubar": "^1.1.20",
+    "@radix-ui/react-navigation-menu": "^1.2.18",
+    "@radix-ui/react-popover": "^1.1.19",
+    "@radix-ui/react-select": "^2.3.3",
+    "@radix-ui/react-tooltip": "^1.2.12",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "class-variance-authority": "^0.7.1",
     "hono": "^4.13.3",
+    "sonner": "^1.7.4",
     "tsx": "^4.20.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vaul": "^1.1.2"
   },
   "scripts": {
     "test": "node --import tsx --test lib/*.test.ts"

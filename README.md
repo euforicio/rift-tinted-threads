@@ -48,6 +48,11 @@ bb plugin reload tinted-threads
 
 Then select `Tinted Threads` in Settings → Appearance → Sidebar.
 
+## Fork provenance
+
+Rift Labs fork: https://github.com/euforicio/rift-tinted-threads
+Upstream: https://github.com/grrowl/bb-tinted-threads
+
 ## Verify
 
 ```sh

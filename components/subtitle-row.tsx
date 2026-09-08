@@ -1,7 +1,7 @@
 import type {
   PluginSidebarPullRequest,
   PluginSidebarThread,
-} from "@get-bb/plugin-sdk/app";
+} from "@riftlabs/plugin-sdk/app";
 import { HermesIcon } from "@/hermes-icon";
 import {
   modelLabel,

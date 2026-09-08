@@ -18,7 +18,7 @@ import {
   useSettings,
   type PluginSidebarThread,
   type PluginThreadListProps,
-} from "@get-bb/plugin-sdk/app";
+} from "@riftlabs/plugin-sdk/app";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   ArrowDown01Icon,

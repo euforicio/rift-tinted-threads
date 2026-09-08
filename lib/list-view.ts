@@ -1,4 +1,4 @@
-import type { PluginSidebarProject, PluginSidebarThread } from "@get-bb/plugin-sdk/app";
+import type { PluginSidebarProject, PluginSidebarThread } from "@riftlabs/plugin-sdk/app";
 import { createListComparator } from "./sort";
 import type { ListSettings } from "./settings";
 import { threadTitle } from "./thread-title";

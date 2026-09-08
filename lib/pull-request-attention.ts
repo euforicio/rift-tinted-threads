@@ -1,4 +1,4 @@
-import type { PluginSidebarPullRequest } from "@get-bb/plugin-sdk/app";
+import type { PluginSidebarPullRequest } from "@riftlabs/plugin-sdk/app";
 import type { PullRequestDetail } from "@/lib/pull-request";
 import type { PullRequestIconName } from "@/components/hugeicon";
 

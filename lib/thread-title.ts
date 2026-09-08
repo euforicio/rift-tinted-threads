@@ -1,4 +1,4 @@
-import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
+import type { PluginSidebarThread } from "@riftlabs/plugin-sdk/app";
 
 export function threadTitle(thread: PluginSidebarThread): string {
   const title = thread.title?.trim();

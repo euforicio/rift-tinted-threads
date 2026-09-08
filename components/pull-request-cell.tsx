@@ -1,4 +1,4 @@
-import type { PluginSidebarPullRequest } from "@get-bb/plugin-sdk/app";
+import type { PluginSidebarPullRequest } from "@riftlabs/plugin-sdk/app";
 import { DiffStatPills } from "@/components/diff-stat-pills";
 import { Hugeicon } from "@/components/hugeicon";
 import { cn } from "@/lib/utils";

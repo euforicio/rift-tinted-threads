@@ -4,7 +4,7 @@ import {
   experimental_useSidebarThreadActions as useSidebarThreadActions,
   type PluginSidebarPullRequest,
   type PluginSidebarThread,
-} from "@get-bb/plugin-sdk/app";
+} from "@riftlabs/plugin-sdk/app";
 import { cn } from "@/lib/utils";
 
 function MenuItem({
